@@ -922,6 +922,36 @@ describe('FlowChatStore session removal active selection', () => {
     expect(flowChatStore.getState().activeSessionId).toBeNull();
     expect(Array.from(flowChatStore.getState().sessions.keys())).toEqual(['session-keep']);
   });
+
+  it('deletes a session whose workspace directory is unavailable (ID-first backend)', async () => {
+    apiMocks.deleteSession.mockResolvedValue(undefined);
+    // A pre-migration assistant workspace can be gone from disk while its
+    // workspace record (and the session's owning workspace ID) survives. The
+    // backend resolves session storage by ID, so deletion must still run.
+    const orphanSession = createSession({
+      sessionId: 'session-orphan',
+      title: 'Orphan',
+      workspaceId: 'workspace-orphan',
+      workspacePath: undefined,
+      projectWorkspacePath: undefined,
+      config: { agentType: 'Standard', workspaceId: 'workspace-orphan' },
+    });
+
+    flowChatStore.setState(() => ({
+      sessions: new Map([[orphanSession.sessionId, orphanSession]]),
+      activeSessionId: orphanSession.sessionId,
+    }));
+
+    await flowChatStore.deleteSession(orphanSession.sessionId, {
+      nextActiveSessionId: null,
+    });
+
+    expect(apiMocks.deleteSession).toHaveBeenCalledWith(
+      orphanSession.sessionId,
+      'workspace-orphan',
+    );
+    expect(flowChatStore.getState().sessions.get(orphanSession.sessionId)).toBeUndefined();
+  });
 });
 
 describe('FlowChatStore token usage', () => {
